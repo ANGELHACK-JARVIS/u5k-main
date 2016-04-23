@@ -131,6 +131,38 @@ def demo():
     conn.close()
     return render_template('dashboard.html', data = data)
 
+######################################################################################33
+#This is the review form implementation
+
+@app.route('/addStats')
+def displayForm():
+    return render_template('addStats.html')
+
+@app.route('/addStats', methods=['POST'])
+def takeData():
+    locale=str(request.form['inputLocale'])
+    water=int(request.form['inputWater'])
+    electricity=int(request.form['inputElectricity'])
+    network=int(request.form['inputNetworkAvailability'])
+    cleanliness=int(request.form['inputCleanliness'])
+    green=int(request.form['inputGreenSpace'])
+    life=int(request.form['inputNightlife'])
+    rmen=int(request.form['inputRepairmenAvailability'])
+    edu=int(request.form['inputeducation'])
+    nhood=int(request.form['inputNeighbourhood'])
+    lent=int(request.form['inputLocalEntertainment'])
+    uid=int(session.get('user'))
+    conn=mysql.connect()
+    cur=conn.cursor()
+    cur.execute("Select Loc_id from Coordinates where Loc_name=%s",(locale))
+    lid=int(cur.fetchone()[0])
+    cur.callproc('sp_addStats',(uid,lid,water,electricity,network,cleanliness, green, lent, life, rmen, edu, nhood))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return render_template('home.html')
+
+######################################################################################
 
 @app.route('/places/<place_name>/')
 def places(place_name):
