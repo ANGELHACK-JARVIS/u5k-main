@@ -151,11 +151,14 @@ def takeData():
     edu=int(request.form['inputeducation'])
     nhood=int(request.form['inputNeighbourhood'])
     lent=int(request.form['inputLocalEntertainment'])
+    rev=str(request.form['inputReview'])
     uid=int(session.get('user'))
     conn=mysql.connect()
     cur=conn.cursor()
     cur.execute("Select Loc_id from Coordinates where Loc_name=%s",(locale))
     lid=int(cur.fetchone()[0])
+    cur.execute("Insert into Review (UserId,Loc_id,review_text) values(%s,%s,%s)",(uid,lid,rev))
+    conn.commit()
     cur.callproc('sp_addStats',(uid,lid,water,electricity,network,cleanliness, green, lent, life, rmen, edu, nhood))
     conn.commit()
     cur.close()
@@ -214,11 +217,42 @@ def places(place_name):
         cursor.close()
         conn.close()
         ########################################################
-
-        return render_template('demo.html',name=name, mymap=mymap,data=data,lat = data[2],lon=data[3], graphs=graphs)
-
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Review where Loc_id = (SELECT Loc_id from Coordinates where Loc_name=%s) ",(place_name))
+        dat = cursor.fetchall()
+        use_fec=[]
+        for review in dat:
+            cursor.execute("SELECT UserName from User where UserId = %s", review[0])
+            use_fec.append([cursor.fetchone()[0],review[2]])
+        print use_fec
+        return render_template('demo.html', use_fec=use_fec, rev_data=dat,name=name, mymap=mymap, data=data,lat = data[2], lon=data[3], graphs=graphs,dat=dat)
     else:
         return render_template('error.html',error = 'Unauthorized Access')
+@app.route('/compare')
+def mulCity():
+    title="Crime Rates"
+    crime_graph=pygal.Bar(width=600, height=600, explicit_size=True, title=title, style=BlueStyle, disable_xml_declaration=True, range=(0,10))
+    crime_graph.x_labels=['Theft','Violence', 'Harassment']
+    conn = mysql.connect()
+    cursor = conn.cursor()
+    lifestyle_graph=pygal.Bar(width=1200, height=600, explicit_size=True, title="Living Standards", style=BlueStyle, disable_xml_declaration=True, range=(0,10))
+    lifestyle_graph.x_labels=["Water", "Electricity", "Network Availability", "Cleanliness", "Green Space", "Local Entertainment", "Night Life", "Services", "Education", "Neighbourhood"]
+    cursor.execute("Select * from Coordinates")
+    places=cursor.fetchall()
+    print places
+    for place in places:
+        cursor.execute("SELECT avg(Theft), avg(Violence), avg(Harassment) from Security, Coordinates where Security.Loc_id=%s", (place[0]))
+        crime_details=cursor.fetchall()[0]
+        crime_graph.add(place[1], [crime_details[0], crime_details[1], crime_details[2]])
+        cursor.execute("SELECT avg(Water), avg(Electricity), avg(Network_Availability), avg(Cleanliness), avg(Green_space), avg(Local_Entertainment), avg(NightLife), avg(Repairmen_avail), avg(Education), avg(Neighbourhood) from LifeStyle where Loc_id=%s", (place[0]))
+        lifestyle_details=cursor.fetchall()[0]
+        lifestyle_graph.add(place[1],[lifestyle_details[0], lifestyle_details[1], lifestyle_details[2], lifestyle_details[3], lifestyle_details[4], lifestyle_details[5], lifestyle_details[6], lifestyle_details[7], lifestyle_details[8], lifestyle_details[9] ])
+
+    chart = crime_graph.render(is_unicode=True)
+    life=lifestyle_graph.render(is_unicode=True)
+    return render_template('compare.html', chart=chart, life=life)
+
 @app.route('/demo')
 def userHome():
     if session.get('user'):
@@ -231,6 +265,7 @@ def userHome():
         return render_template('demo.html', mymap=mymap)
     else:
         return render_template('error.html',error = 'Unauthorized Access')
+
 
 @app.route('/logout')
 def logout():
